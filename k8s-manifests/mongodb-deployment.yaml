@@ -1,0 +1,90 @@
+# --- Secret ---
+# Stores sensitive data (passwords) as base64-encoded values.
+# Never hardcode passwords in Deployments directly.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+type: Opaque
+data:
+  # Generate with: echo -n "admin" | base64
+  # echo -n "password123" | base64
+  mongo-username: YWRtaW4=        # "admin" in base64
+  mongo-password: bXlTdHJvbmdQYXNzNDI= # "password123" in base64
+
+---
+# --- PersistentVolumeClaim ---
+# MongoDB needs disk storage that survives pod restarts.
+# Without this, every time the MongoDB pod restarts, ALL DATA IS LOST.
+# PVC = "I need X amount of storage" request to the cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce     # only one pod can write at a time (fine for single MongoDB)
+  storageClassName: gp3  # EKS gp3 — cheaper, faster, decoupled IOPS
+  resources:
+    requests:
+      storage: 1Gi      # 1 gigabyte — enough for dev/demo
+
+---
+# --- Deployment ---
+# Deployment manages Pods. It ensures the desired number of replicas are running.
+# If a pod crashes, the Deployment controller creates a new one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+spec:
+  replicas: 1           # MongoDB single instance (clustering is complex, skip for now)
+  selector:
+    matchLabels:
+      app: mongodb      # this Deployment manages pods with label app=mongodb
+  template:             # pod template — every pod created looks like this
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7
+          ports:
+            - containerPort: 27017
+          env:
+            # Pull values from the Secret we defined above
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-password
+          volumeMounts:
+            - name: mongo-storage
+              mountPath: /data/db   # MongoDB stores data here inside the container
+      volumes:
+        - name: mongo-storage
+          persistentVolumeClaim:
+            claimName: mongodb-pvc  # bind the PVC we defined above
+
+---
+# --- Service ---
+# A Service gives a stable DNS name + IP to reach a pod.
+# Pods have random IPs that change on restart. Services don't.
+# Type: ClusterIP = only reachable INSIDE the cluster (MongoDB should never be public)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+spec:
+  selector:
+    app: mongodb        # routes traffic to pods with label app=mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+  type: ClusterIP

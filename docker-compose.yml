@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+
+  # --- MongoDB ---
+  mongodb:
+    image: mongo:7          # official MongoDB image, no custom Dockerfile needed
+    container_name: mongodb
+    ports:
+      - "27017:27017"       # expose to host so you can connect via Compass or CLI
+    volumes:
+      - mongo_data:/data/db  # named volume — data survives container restarts
+    environment:
+      # These create a root user on first startup
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+
+  # --- Backend ---
+  backend:
+    build: ./backend        # builds Dockerfile in ./backend
+    container_name: backend
+    ports:
+      - "3000:3000"
+    environment:
+      # "mongodb" here is the SERVICE NAME above — Docker's internal DNS
+      # resolves service names to container IPs automatically.
+      # You never hardcode IPs in Docker Compose.
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/3-tier-DevOps?authSource=admin
+    depends_on:
+      - mongodb             # start mongodb container before backend
+
+  # --- Frontend ---
+  frontend:
+    build: ./frontend
+    container_name: frontend
+    ports:
+      - "8080:80"           # access app at http://localhost:8080
+    depends_on:
+      - backend
+
+# Named volume — Docker manages where this lives on your host
+volumes:
+  mongo_data:

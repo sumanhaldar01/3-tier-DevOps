@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-hub
+  namespace: argocd      # ArgoCD resources live in the argocd namespace
+spec:
+  project: default
+
+  # Where is the desired state? (your Git repo)
+  source:
+    repoURL: https://github.com/suman/3-tier-DevOps
+    targetRevision: main
+    path: k8s-manifests
+
+  # Where should it deploy to?
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devops-hub
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

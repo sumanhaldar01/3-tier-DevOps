@@ -1,0 +1,60 @@
+# --- ConfigMap ---
+# Non-sensitive config. Here we store the MongoDB connection string.
+# We use the Service name "mongodb-service" as the hostname — Kubernetes DNS resolves it.
+# Password is injected from mongodb-secret at runtime via env var substitution.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  MONGO_URI: "mongodb://admin:$(MONGO_PASSWORD)@mongodb-service:27017/myapp?authSource=admin"
+  PORT: "3000"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 2           # 2 pods for basic availability — if one dies, other serves traffic
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          # This image tag will be replaced by GitHub Actions with a commit SHA
+          # e.g., sonuh/backend:abc1234
+          image: sonuh/backend:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: backend-config  # inject all ConfigMap keys as env vars
+            - secretRef:
+                name: mongodb-secret  # inject MONGO_PASSWORD from secret
+          # Liveness probe: Kubernetes calls /health every 10s
+          # If it fails 3 times → restart the pod
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15   # wait 15s before first check (startup time)
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+  type: ClusterIP       # internal only — frontend talks to backend inside the cluster

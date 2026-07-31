@@ -1,0 +1,55 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: devops-hub
+  region: eu-north-1
+  version: "1.29"
+
+# Delete cluster after testing: eksctl delete cluster -f eksctl-cluster.yaml
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+  - metadata:
+      name: aws-load-balancer-controller
+      namespace: kube-system
+    wellKnownPolicies:
+      awsLoadBalancerController: true
+
+managedNodeGroups:
+- name: standard-workers
+  instanceType: t3.medium          # Cost-optimized: 2 vCPU, 4 GiB RAM (~$30/mo vs m5.large ~$60/mo)
+  minSize: 1
+  maxSize: 3
+  desiredCapacity: 2
+  volumeSize: 20
+  volumeType: gp3
+  privateNetworking: true
+  labels:
+    workload-type: general
+  tags:
+    Environment: dev
+    Project: 3-tier-devops
+    Owner: suman
+  iam:
+    withAddonPolicies:
+      autoScaler: true
+      ebs: true
+      efs: true
+      cloudWatch: true
+
+addons:
+- name: vpc-cni
+  version: latest
+- name: coredns
+  version: latest
+- name: kube-proxy
+  version: latest
+- name: aws-ebs-csi-driver
+  version: latest
+
+# Enable cluster autoscaler
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
