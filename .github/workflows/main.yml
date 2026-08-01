@@ -234,11 +234,11 @@ jobs:
           # sed -i = edit file in-place
           # Pattern: match "image: dockeruser/backend:" followed by anything → replace tag
           sed -i \
-            "s|image: ${{ secrets.DOCKER_USERNAME }}/backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/backend:${IMAGE_TAG}|g" \
+            "s|image: ${{ secrets.DOCKER_USERNAME }}/backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/backend:sha-${IMAGE_TAG}|g" \
             k8s-manifests/backend-deployment.yaml
 
           sed -i \
-            "s|image: ${{ secrets.DOCKER_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKER_USERNAME }}/frontend:${IMAGE_TAG}|g" \
+            "s|image: ${{ secrets.DOCKER_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKER_USERNAME }}/frontend:sha-${IMAGE_TAG}|g" \
             k8s-manifests/frontend-deployment.yaml
 
           # Confirm what changed
