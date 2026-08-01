@@ -15,5 +15,11 @@
   },
   "devDependencies": {
     "eslint": "^8.57.0"
+  },
+  "overrides": {
+    "brace-expansion": "2.1.2",
+    "picomatch": "4.0.4",
+    "sigstore": "4.1.1",
+    "tar": "7.5.19"
   }
 }
