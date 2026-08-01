@@ -9,7 +9,7 @@ RUN npm install
 
 COPY src/ ./src/
 
-# ─── STAGE 2: production ────────────────────────────────────────────
+# ─── STAGE 2: production ───────────────────────────────────────
 FROM node:22-alpine AS production
 
 RUN rm -rf /usr/local/lib/node_modules/npm \
