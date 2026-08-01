@@ -12,6 +12,10 @@ COPY src/ ./src/
 # ─── STAGE 2: production ────────────────────────────────────────────
 FROM node:22-alpine AS production
 
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm \
+           /usr/local/bin/npx
+
 USER node
 
 WORKDIR /app
