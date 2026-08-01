@@ -7,7 +7,6 @@ kind: ConfigMap
 metadata:
   name: backend-config
 data:
-  MONGO_URI: "mongodb://admin:$(MONGO_PASSWORD)@mongodb-service:27017/myapp?authSource=admin"
   PORT: "3000"
 
 ---
@@ -35,8 +34,19 @@ spec:
           envFrom:
             - configMapRef:
                 name: backend-config  # inject all ConfigMap keys as env vars
-            - secretRef:
-                name: mongodb-secret  # inject MONGO_PASSWORD from secret
+          env:
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-username
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-secret
+                  key: mongo-password
+            - name: MONGO_URI
+              value: "mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@mongodb-service:27017/myapp?authSource=admin"
           # Liveness probe: Kubernetes calls /health every 10s
           # If it fails 3 times → restart the pod
           livenessProbe:
