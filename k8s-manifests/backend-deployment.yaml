@@ -67,4 +67,4 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
-  type: ClusterIP       # internal only — frontend talks to backend inside the cluster
+  type: LoadBalancer       # internal only — frontend talks to backend inside the cluster
