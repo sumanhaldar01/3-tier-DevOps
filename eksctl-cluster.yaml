@@ -3,7 +3,7 @@ kind: ClusterConfig
 
 metadata:
   name: devops-hub-cluster
-  region: us-east-1
+  region: eu-north-1
   version: "1.35"
 
 # ── OIDC ──
