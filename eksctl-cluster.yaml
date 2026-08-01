@@ -2,54 +2,35 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: devops-hub
-  region: eu-north-1
+  name: devops-hub-cluster
+  region: us-east-1
   version: "1.29"
 
-# Delete cluster after testing: eksctl delete cluster -f eksctl-cluster.yaml
-
+# ── OIDC ──
+# withOIDC: true replaces the separate command:
+#   eksctl utils associate-iam-oidc-provider --cluster devops-hub-cluster --approve
+# Now it happens automatically during cluster creation — one less step.
 iam:
   withOIDC: true
-  serviceAccounts:
-  - metadata:
-      name: aws-load-balancer-controller
-      namespace: kube-system
-    wellKnownPolicies:
-      awsLoadBalancerController: true
 
 managedNodeGroups:
-- name: standard-workers
-  instanceType: t3.medium          # Cost-optimized: 2 vCPU, 4 GiB RAM (~$30/mo vs m5.large ~$60/mo)
-  minSize: 1
-  maxSize: 3
-  desiredCapacity: 2
-  volumeSize: 20
-  volumeType: gp3
-  privateNetworking: true
-  labels:
-    workload-type: general
-  tags:
-    Environment: dev
-    Project: 3-tier-devops
-    Owner: suman
-  iam:
-    withAddonPolicies:
-      autoScaler: true
-      ebs: true
-      efs: true
-      cloudWatch: true
+  - name: devops-hub-nodes
+    instanceType: t3.medium
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 3
+    privateNetworking: true
+    # NOTE: removed withAddonPolicies (ebs/albIngress) from here on purpose.
+    # That old pattern gives the permission to the NODE — every pod on it inherits it.
+    # We use the addon block below instead — scoped to just the CSI driver pod.
 
+# ── EBS CSI Driver — auto IAM role + policy + addon install, all in one ──
+# wellKnownPolicies.ebsCSIController: true does 3 things automatically:
+#   1. Creates IAM role scoped to a Kubernetes ServiceAccount (not the node)
+#   2. Attaches AmazonEBSCSIDriverPolicy to that role
+#   3. Installs the aws-ebs-csi-driver addon wired to use that role
+# Replaces: eksctl create iamserviceaccount + aws eks create-addon (2 separate commands)
 addons:
-- name: vpc-cni
-  version: latest
-- name: coredns
-  version: latest
-- name: kube-proxy
-  version: latest
-- name: aws-ebs-csi-driver
-  version: latest
-
-# Enable cluster autoscaler
-cloudWatch:
-  clusterLogging:
-    enableTypes: ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true

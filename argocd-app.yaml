@@ -8,7 +8,7 @@ spec:
 
   # Where is the desired state? (your Git repo)
   source:
-    repoURL: https://github.com/suman/3-tier-DevOps
+    repoURL: https://github.com/sumanhaldar01/3-tier-DevOps
     targetRevision: main
     path: k8s-manifests
 
