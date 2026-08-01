@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EKSFullAccess",
+      "Comment": "the actual missing piece — none of your attached AWS managed policies grant eks:CreateCluster",
+      "Effect": "Allow",
+      "Action": "eks:*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AutoScalingForManagedNodeGroups",
+      "Comment": "managed nodegroups run on an ASG behind the scenes — EC2FullAccess doesn't cover autoscaling actions",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:CreateAutoScalingGroup",
+        "autoscaling:DeleteAutoScalingGroup",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:CreateLaunchConfiguration",
+        "autoscaling:DeleteLaunchConfiguration",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:CreateOrUpdateTags",
+        "autoscaling:DeleteTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SSMReadOnlyForAMILookup",
+      "Comment": "eksctl looks up latest Amazon Linux AMI via SSM Parameter Store — read-only",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "*"
+    }
+  ]
+}

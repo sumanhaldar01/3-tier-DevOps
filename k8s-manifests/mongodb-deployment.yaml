@@ -24,7 +24,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce     # only one pod can write at a time (fine for single MongoDB)
-  storageClassName: gp3  # EKS gp3 — cheaper, faster, decoupled IOPS
+  storageClassName: ebs-gp3  # EKS gp3 — cheaper, faster, decoupled IOPS
   resources:
     requests:
       storage: 1Gi      # 1 gigabyte — enough for dev/demo
