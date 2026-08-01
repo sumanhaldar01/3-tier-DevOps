@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: sonuh/frontend:sha-d356255
+          image: sonuh/frontend:sha-e7549e1
           ports:
             - containerPort: 80
 

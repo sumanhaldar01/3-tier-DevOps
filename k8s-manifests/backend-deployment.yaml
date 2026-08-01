@@ -28,7 +28,7 @@ spec:
         - name: backend
           # This image tag will be replaced by GitHub Actions with a commit SHA
           # e.g., sonuh/backend:abc1234
-          image: sonuh/backend:sha-d356255
+          image: sonuh/backend:sha-e7549e1
           ports:
             - containerPort: 3000
           envFrom:
