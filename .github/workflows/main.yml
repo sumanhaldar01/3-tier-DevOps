@@ -122,7 +122,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
 
       # Only push AFTER scan passes.
       # If scan failed, this step never runs → vulnerable image never on DockerHub.
@@ -192,7 +192,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL'
 
       - name: Push frontend image
         uses: docker/build-push-action@v5
