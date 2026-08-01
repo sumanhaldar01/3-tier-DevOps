@@ -277,35 +277,24 @@ jobs:
       # Login using token — never username/password in pipelines.
       # --grpc-web → works even if ArgoCD is behind HTTP proxy/ALB (which it is on EKS).
       # --insecure → skip TLS cert check (ALB self-signed cert). Remove once you add real cert.
-      - name: Login to ArgoCD
-        env:
-          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
-          ARGOCD_TOKEN:  ${{ secrets.ARGOCD_TOKEN }}
-        run: |
-          argocd login $ARGOCD_SERVER \
-            --auth-token $ARGOCD_TOKEN \
-            --insecure \
-            --grpc-web
-
       - name: Force ArgoCD sync
         env:
           ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
         run: |
           argocd app sync devops-hub \
+            --server $ARGOCD_SERVER \
             --insecure \
             --grpc-web \
-            --force     # force replace if sync is stuck
+            --force
 
-      # Block pipeline until:
-      # --health = all pods pass liveness/readiness probes
-      # --sync   = all manifests applied successfully
-      # --timeout 180 = give up after 3 min if cluster is slow
-      # If this fails → pipeline fails → you get notified → bad deploy caught.
       - name: Wait for healthy deployment
         env:
           ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
         run: |
           argocd app wait devops-hub \
+            --server $ARGOCD_SERVER \
             --health \
             --sync \
             --insecure \
