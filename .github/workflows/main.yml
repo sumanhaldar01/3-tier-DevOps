@@ -8,17 +8,16 @@ on:
       - '**.md'
   pull_request:
     branches: [main]
-    
+
 permissions:
   contents: write
-    
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   test:
@@ -32,13 +31,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          # Cache npm deps between runs — faster pipeline on repeated pushes
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
         working-directory: ./backend
-        # npm ci = uses package-lock.json exactly. Reproducible. Faster than npm install.
         run: npm ci
 
       - name: Run tests
@@ -70,7 +67,7 @@ jobs:
   docker-backend:
     name: Build, Scan & Push Backend
     runs-on: ubuntu-latest
-    needs: [test, lint]  
+    needs: [test, lint]
     outputs:
       image_tag: ${{ steps.tag.outputs.short_sha }}
 
@@ -80,7 +77,6 @@ jobs:
 
       - name: Set short SHA tag
         id: tag
-        # Cut SHA to 7 chars. Stored as step output AND env var.
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
@@ -110,10 +106,9 @@ jobs:
         with:
           context: ./backend
           push: false
-          load: true            # load into local docker, not registry
+          load: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # BuildKit cache — reuses layers from previous runs via GitHub Actions cache
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -125,11 +120,10 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          severity: 'CRITICAL,HIGH'
 
-      # Only push AFTER scan passes.
-      # If scan failed, this step never runs → vulnerable image never on DockerHub.
       - name: Push backend image
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -142,7 +136,7 @@ jobs:
   docker-frontend:
     name: Build, Scan & Push Frontend
     runs-on: ubuntu-latest
-    needs: [test, lint]          # same gate as backend
+    needs: [test, lint]
     outputs:
       image_tag: ${{ steps.tag.outputs.short_sha }}
 
@@ -195,9 +189,10 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          severity: 'CRITICAL,HIGH'
 
       - name: Push frontend image
+        if: github.event_name == 'push'
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -211,16 +206,14 @@ jobs:
     name: Update Kubernetes Manifests
     runs-on: ubuntu-latest
     needs: [docker-backend, docker-frontend]
-    # Only run on actual push to main — not on PRs
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Use PAT with write access — default GITHUB_TOKEN can't push to protected branches
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0   # full history needed for git push
+          fetch-depth: 0
 
       - name: Setup Git identity
         run: |
@@ -229,37 +222,30 @@ jobs:
 
       - name: Update image tags in manifests
         env:
-          IMAGE_TAG: ${{ needs.docker-backend.outputs.image_tag }}
+          BACKEND_TAG: ${{ needs.docker-backend.outputs.image_tag }}
+          FRONTEND_TAG: ${{ needs.docker-frontend.outputs.image_tag }}
         run: |
-          # sed -i = edit file in-place
-          # Pattern: match "image: dockeruser/backend:" followed by anything → replace tag
           sed -i \
-            "s|image: ${{ secrets.DOCKER_USERNAME }}/backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/backend:sha-${IMAGE_TAG}|g" \
+            "s|image: ${{ secrets.DOCKER_USERNAME }}/backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/backend:sha-${BACKEND_TAG}|g" \
             k8s-manifests/backend-deployment.yaml
 
           sed -i \
-            "s|image: ${{ secrets.DOCKER_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKER_USERNAME }}/frontend:sha-${IMAGE_TAG}|g" \
+            "s|image: ${{ secrets.DOCKER_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKER_USERNAME }}/frontend:sha-${FRONTEND_TAG}|g" \
             k8s-manifests/frontend-deployment.yaml
 
-          # Confirm what changed
           echo "── backend manifest ──"
           grep "image:" k8s-manifests/backend-deployment.yaml
-
           echo "── frontend manifest ──"
           grep "image:" k8s-manifests/frontend-deployment.yaml
 
       - name: Commit and push manifest changes
         env:
-          IMAGE_TAG: ${{ needs.docker-backend.outputs.image_tag }}
+          BACKEND_TAG: ${{ needs.docker-backend.outputs.image_tag }}
         run: |
           git add k8s-manifests/backend-deployment.yaml \
                   k8s-manifests/frontend-deployment.yaml
-
-          # [skip ci] → GitHub Actions ignores this commit — no new pipeline run.
-          # This is the second safety net after paths-ignore.
-          git commit -m "ci: update image tags to ${IMAGE_TAG} [skip ci]" \
+          git commit -m "ci: update image tags to ${BACKEND_TAG} [skip ci]" \
             || echo "No changes to commit"
-
           git push
 
   argocd-sync:
@@ -272,14 +258,13 @@ jobs:
       - name: Install ArgoCD CLI
         run: |
           curl -sSL -o argocd \
-            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+            https://github.com/argoproj/argo-cd/releases/download/v3.4.5/argocd-linux-amd64
           chmod +x argocd
           sudo mv argocd /usr/local/bin/
           argocd version --client
 
-      # Login using token — never username/password in pipelines.
-      # --grpc-web → works even if ArgoCD is behind HTTP proxy/ALB (which it is on EKS).
-      # --insecure → skip TLS cert check (ALB self-signed cert). Remove once you add real cert.
+      # --insecure skips the ALB's self-signed TLS cert check — known tech debt,
+      # fine for this learning cluster, remove once a real cert is in place.
       - name: Force ArgoCD sync
         env:
           ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
